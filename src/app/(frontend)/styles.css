@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Cairo', sans-serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-sans);
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  ::selection {
+    background: #721b3b;
+    color: white;
+  }
+}
+
+@layer components {
+  .input-field {
+    width: 100%;
+    border-radius: 0.875rem;
+    border: 1px solid #ddd0d4;
+    background: #fff;
+    padding: 0.875rem 1rem;
+    color: #321921;
+    font-size: 0.875rem;
+    outline: none;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .input-field::placeholder {
+    color: #b3a1a6;
+  }
+
+  .input-field:focus {
+    border-color: #721b3b;
+    box-shadow: 0 0 0 3px rgb(114 27 59 / 0.08);
+  }
+}
+
+.figma-custom-code-fragment {
+  display: contents;
+}
+
+.figma-bypass-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 2147483647;
+  transform: translateY(-150%);
+  border-radius: 6px;
+  background: #111827;
+  color: #fff;
+  padding: 8px 12px;
+  font:
+    600 14px/1.2 system-ui,
+    sans-serif;
+  text-decoration: none;
+}
+
+.figma-bypass-link:focus {
+  transform: translateY(0);
+}
