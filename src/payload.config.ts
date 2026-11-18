@@ -30,6 +30,16 @@ const admin = {
   },
 }
 
+if (
+  process.env.E2E_LOCAL_DB !== '1' &&
+  !process.env.FIGMA_EID &&
+  (!process.env.PAYLOAD_SECRET || !process.env.DATABASE_URL)
+) {
+  throw new Error(
+    'Production Payload requires PAYLOAD_SECRET and DATABASE_URL. Configure both environment variables before starting the app.',
+  )
+}
+
 const config =
   process.env.E2E_LOCAL_DB === '1'
     ? e2eConfig
