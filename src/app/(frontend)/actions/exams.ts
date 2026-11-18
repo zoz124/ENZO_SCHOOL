@@ -213,3 +213,65 @@ export async function submitAttemptAction(input: {
     return { ok: false, message: 'تعذر تسليم الامتحان. تحقق من الاتصال وحاول مرة أخرى.' }
   }
 }
+
+export async function toggleExamStatusAction(
+  examId: string,
+): Promise<{ ok: boolean; status?: 'active' | 'archived'; message?: string }> {
+  const teacher = await getCurrentTeacher()
+  if (!teacher) return { ok: false, message: 'انتهت الجلسة. سجل الدخول مرة أخرى.' }
+
+  if (!examId || typeof examId !== 'string') {
+    return { ok: false, message: 'معرف الامتحان غير صحيح.' }
+  }
+
+  try {
+    const payload = await getPayload({ config })
+    const exam = await payload.findByID({
+      collection: 'exams',
+      id: examId,
+      user: teacher,
+      overrideAccess: false,
+      depth: 0,
+    })
+
+    if (!exam) return { ok: false, message: 'الامتحان غير موجود أو لا تملك صلاحية تعديله.' }
+
+    const newStatus: 'active' | 'archived' = exam.status === 'active' ? 'archived' : 'active'
+    await payload.update({
+      collection: 'exams',
+      id: examId,
+      data: { status: newStatus },
+      user: teacher,
+      overrideAccess: false,
+    })
+
+    return { ok: true, status: newStatus }
+  } catch {
+    return { ok: false, message: 'تعذر تعديل حالة الامتحان.' }
+  }
+}
+
+export async function deleteExamAction(
+  examId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  const teacher = await getCurrentTeacher()
+  if (!teacher) return { ok: false, message: 'انتهت الجلسة. سجل الدخول مرة أخرى.' }
+
+  if (!examId || typeof examId !== 'string') {
+    return { ok: false, message: 'معرف الامتحان غير صحيح.' }
+  }
+
+  try {
+    const payload = await getPayload({ config })
+    await payload.delete({
+      collection: 'exams',
+      id: examId,
+      user: teacher,
+      overrideAccess: false,
+    })
+
+    return { ok: true }
+  } catch {
+    return { ok: false, message: 'تعذر حذف الامتحان.' }
+  }
+}

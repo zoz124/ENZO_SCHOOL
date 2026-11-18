@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
+
+:root {
+  --font-body: 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Enzo School Burgundy Theme */
+  --theme-elevation-0: #ffffff;
+  --theme-elevation-50: #faf7f8;
+  --theme-elevation-100: #f6eef1;
+  --theme-elevation-150: #efe4e8;
+  --theme-elevation-200: #e5d4da;
+
+  --theme-primary-50: #fbf2f5;
+  --theme-primary-100: #f6e6ec;
+  --theme-primary-200: #eed0db;
+  --theme-primary-300: #dfaabf;
+  --theme-primary-400: #ca7699;
+  --theme-primary-500: #b14974;
+  --theme-primary-600: #8c264f;
+  --theme-primary-700: #721b3b;
+  --theme-primary-800: #5f1833;
+  --theme-primary-900: #321921;
+}
+
+body {
+  font-family: var(--font-body) !important;
+  letter-spacing: -0.01em;
+}
+
+/* Primary buttons styling */
+.btn--style-primary,
+button[type='submit'],
+.btn.btn--size-medium.btn--style-primary {
+  background-color: #721b3b !important;
+  color: #ffffff !important;
+  border-radius: 0.75rem !important;
+  font-family: var(--font-body) !important;
+  font-weight: 700 !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn--style-primary:hover,
+button[type='submit']:hover {
+  background-color: #5d1530 !important;
+  transform: translateY(-1px);
+}
+
+/* Secondary / Pill buttons */
+.btn--style-secondary {
+  border-radius: 0.75rem !important;
+  font-family: var(--font-body) !important;
+}
+
+/* Sidebar navigation */
+.app-header,
+.nav {
+  font-family: var(--font-body) !important;
+}
+
+.nav__link--active,
+.nav a.active {
+  background-color: #f7ebef !important;
+  color: #721b3b !important;
+  font-weight: 800 !important;
+  border-radius: 0.75rem !important;
+}
+
+/* Table headers & cells */
+.table thead th,
+.table__header {
+  font-family: var(--font-body) !important;
+  font-weight: 700 !important;
+  color: #6a535a !important;
+  background-color: #faf6f7 !important;
+}
+
+.table tbody tr:hover {
+  background-color: #fdfafb !important;
+}
+
+/* Inputs & Form controls */
+input,
+select,
+textarea {
+  font-family: var(--font-body) !important;
+  border-radius: 0.75rem !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #721b3b !important;
+  box-shadow: 0 0 0 3px rgba(114, 27, 59, 0.12) !important;
+}
+
+/* Badges & Tags */
+.pill {
+  font-family: var(--font-body) !important;
+  border-radius: 9999px !important;
+  font-weight: 700 !important;
+}
+
+/* Selection */
+::selection {
+  background-color: #721b3b !important;
+  color: #ffffff !important;
+}

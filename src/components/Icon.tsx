@@ -7,12 +7,15 @@ type IconName =
   | 'check'
   | 'clock'
   | 'copy'
+  | 'eye'
   | 'file'
   | 'graduation'
   | 'home'
   | 'link'
   | 'logout'
   | 'menu'
+  | 'pause'
+  | 'play'
   | 'plus'
   | 'sparkle'
   | 'target'
@@ -37,6 +40,12 @@ const paths: Record<IconName, React.ReactNode> = {
     <>
       <rect x="8" y="8" width="12" height="12" rx="2" />
       <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
     </>
   ),
   file: (
@@ -70,6 +79,13 @@ const paths: Record<IconName, React.ReactNode> = {
     </>
   ),
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
+  pause: (
+    <>
+      <rect x="6" y="4" width="4" height="16" rx="1" />
+      <rect x="14" y="4" width="4" height="16" rx="1" />
+    </>
+  ),
+  play: <path d="m5 3 14 9-14 9V3z" />,
   plus: <path d="M12 5v14M5 12h14" />,
   sparkle: (
     <path d="m12 3 1.4 4.1L17.5 8.5l-4.1 1.4L12 14l-1.4-4.1-4.1-1.4 4.1-1.4zM19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7z" />

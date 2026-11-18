@@ -3,7 +3,9 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getPayload } from 'payload'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
+import { ExamActions } from '@/components/ExamActions'
 import { Icon } from '@/components/Icon'
+import { StudentResultsTable } from '@/components/StudentResultsTable'
 import { getCurrentTeacher } from '@/lib/teacher-auth'
 
 const formatDateTime = (value?: string | null) =>
@@ -101,13 +103,19 @@ export default async function ExamDetailsPage({ params }: { params: Promise<{ id
               </span>
             </div>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <p className="text-[11px] font-bold text-white/45">رابط الطلاب</p>
-            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <code dir="ltr" className="rounded-xl bg-black/20 px-4 py-3 text-xs text-white/75">
-                /exam/{exam.code}
-              </code>
-              <CopyLinkButton path={`/exam/${exam.code}`} />
+          <div className="flex flex-col gap-4">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-[11px] font-bold text-white/45">رابط الطلاب</p>
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <code dir="ltr" className="rounded-xl bg-black/20 px-4 py-3 text-xs text-white/75">
+                  /exam/{exam.code}
+                </code>
+                <CopyLinkButton path={`/exam/${exam.code}`} />
+              </div>
+            </div>
+            {/* أزرار التحكم في الامتحان: إيقاف أو حذف */}
+            <div className="flex justify-end">
+              <ExamActions examId={String(exam.id)} currentStatus={exam.status} />
             </div>
           </div>
         </div>
@@ -138,69 +146,13 @@ export default async function ExamDetailsPage({ params }: { params: Promise<{ id
         <div className="border-b border-[#eee5e7] px-6 py-5">
           <h2 className="text-lg font-black text-[#321921]">نتائج الطلاب</h2>
           <p className="mt-1 text-xs text-[#9b858c]">
-            وقت الدخول ومدة الحل والدرجة والأخطاء لكل طالب
+            سجل الطلاب، وقت الدخول والخروج، والأسئلة التي أخطأوا فيها بالتفصيل
           </p>
         </div>
-        {attempts.docs.length === 0 ? (
-          <div className="py-16 text-center">
-            <span className="mx-auto grid size-16 place-items-center rounded-3xl bg-[#f5edef] text-[#721b3b]">
-              <Icon name="users" className="size-8" />
-            </span>
-            <h3 className="mt-5 font-black text-[#321921]">لم يدخل أي طالب بعد</h3>
-            <p className="mt-2 text-sm text-[#927d84]">
-              انسخ رابط الامتحان وأرسله للطلاب، وستظهر النتائج هنا فور التسليم.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-right text-sm">
-              <thead className="bg-[#faf7f4] text-xs text-[#927d84]">
-                <tr>
-                  <th className="px-6 py-4 font-bold">الطالب</th>
-                  <th className="px-6 py-4 font-bold">وقت الدخول</th>
-                  <th className="px-6 py-4 font-bold">مدة الحل</th>
-                  <th className="px-6 py-4 font-bold">الدرجة</th>
-                  <th className="px-6 py-4 font-bold">الأخطاء</th>
-                  <th className="px-6 py-4 font-bold">الحالة</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#f0e8ea]">
-                {attempts.docs.map((attempt) => {
-                  const percent = attempt.maxScore
-                    ? Math.round((attempt.score / attempt.maxScore) * 100)
-                    : 0
-                  return (
-                    <tr key={attempt.id} className="text-[#4c363d]">
-                      <td className="px-6 py-4">
-                        <strong className="font-black text-[#321921]">{attempt.studentName}</strong>
-                      </td>
-                      <td className="px-6 py-4 text-xs text-[#7f6b72]">
-                        {formatDateTime(attempt.startedAt)}
-                      </td>
-                      <td className="px-6 py-4 font-bold" dir="ltr">
-                        {formatDuration(attempt.durationSeconds)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="font-black text-[#721b3b]">
-                          {attempt.score}/{attempt.maxScore}
-                        </span>
-                        <span className="mr-2 text-xs text-[#a08a91]">({percent}%)</span>
-                      </td>
-                      <td className="px-6 py-4 font-bold text-red-600">{attempt.wrongCount}</td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`rounded-full px-3 py-1.5 text-[11px] font-black ${attempt.status === 'auto-submitted' ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}
-                        >
-                          {attempt.status === 'auto-submitted' ? 'تلقائي' : 'تم التسليم'}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <StudentResultsTable
+          attempts={attempts.docs as never}
+          questions={(exam.questions ?? []) as never}
+        />
       </section>
     </main>
   )
