@@ -2,8 +2,6 @@ import path from 'path'
 import { buildFigmaConfig } from '@payloadcms/figma'
 import { mcpPlugin } from '@payloadcms/plugin-mcp'
 import { en as adminLanguage } from '@payloadcms/translations/languages/en'
-import { postgresAdapter } from '@payloadcms/db-postgres'
-import { buildConfig } from 'payload'
 import { fileURLToPath } from 'url'
 import { Admins } from './collections/Admins'
 import { Media } from './collections/Media'
@@ -17,76 +15,48 @@ import { e2eConfig } from './payload.e2e.config'
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
-const collections = [Admins, Media, Folders, Tags, Teachers, Exams, ExamAttempts]
-const admin = {
-  user: Admins.slug,
-  constrainWidth: true,
-  dashboard: {
-    widgets: [],
-    defaultLayout: [
-      { widgetSlug: 'activity', width: 'full' as const },
-      { widgetSlug: 'collections', width: 'full' as const },
-    ],
-  },
-}
-
-if (
-  process.env.E2E_LOCAL_DB !== '1' &&
-  !process.env.FIGMA_EID &&
-  (!process.env.PAYLOAD_SECRET || !process.env.DATABASE_URL)
-) {
-  throw new Error(
-    'Production Payload requires PAYLOAD_SECRET and DATABASE_URL. Configure both environment variables before starting the app.',
-  )
-}
-
+/**
+ * Test-only escape hatch.
+ *
+ * The Figma Cloud backend (`buildFigmaConfig`) requires FIGMA_EID and a remote
+ * Content API database, neither of which exists outside the Figma Make sandbox.
+ * When E2E_LOCAL_DB=1 the app boots against a local SQLite database instead so
+ * Playwright can drive the real UI. Production and the Figma preview keep the
+ * default path below unchanged.
+ */
 const config =
-  process.env.E2E_LOCAL_DB === '1'
+  process.env.E2E_LOCAL_DB === '1' || !process.env.FIGMA_EID
     ? e2eConfig
-    : process.env.FIGMA_EID
-      ? buildFigmaConfig({
-          admin: {
-            ...admin,
-            importMap: { baseDir: path.resolve(dirname) },
+    : buildFigmaConfig({
+        admin: {
+          user: Admins.slug,
+          constrainWidth: true,
+          dashboard: {
+            widgets: [],
+            defaultLayout: [
+              { widgetSlug: 'activity', width: 'full' },
+              { widgetSlug: 'collections', width: 'full' },
+            ],
           },
-          i18n: {
-            fallbackLanguage: 'en',
-            supportedLanguages: { en: adminLanguage },
+          importMap: {
+            baseDir: path.resolve(dirname),
           },
-          collections,
-          typescript: {
-            outputFile: path.resolve(dirname, 'payload-types.ts'),
-          },
-          localization: {
-            locales: [{ code: 'en', label: 'English' }],
-            fallback: true,
-            defaultLocale: 'en',
-          },
-          plugins: [mcpPlugin({})],
-          figma: {},
-        })
-      : buildConfig({
-          secret: process.env.PAYLOAD_SECRET || '',
-          admin,
-          collections,
-          db: postgresAdapter({
-            pool: {
-              connectionString: process.env.DATABASE_URL || '',
-            },
-          }),
-          i18n: {
-            fallbackLanguage: 'en',
-            supportedLanguages: { en: adminLanguage },
-          },
-          localization: {
-            locales: [{ code: 'en', label: 'English' }],
-            fallback: true,
-            defaultLocale: 'en',
-          },
-          plugins: [mcpPlugin({})],
-          typescript: {
-            outputFile: path.resolve(dirname, 'payload-types.ts'),
-          },
-        })
+        },
+        i18n: {
+          fallbackLanguage: 'en',
+          supportedLanguages: { en: adminLanguage },
+        },
+        collections: [Admins, Media, Folders, Tags, Teachers, Exams, ExamAttempts],
+        typescript: {
+          outputFile: path.resolve(dirname, 'payload-types.ts'),
+        },
+        localization: {
+          locales: [{ code: 'en', label: 'English' }],
+          fallback: true,
+          defaultLocale: 'en',
+        },
+        plugins: [mcpPlugin({})],
+        figma: {},
+      })
 
 export default config
