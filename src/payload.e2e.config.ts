@@ -31,7 +31,7 @@ export const e2eConfig = buildConfig({
       url: process.env.E2E_DB_URL || `file:${path.join(dirname, '..', 'e2e', '.tmp', 'e2e.db')}`,
     },
   }),
-  typescript: { outputFile: path.join(dirname, '..', 'e2e', '.tmp', 'payload-types.ts') },
+  typescript: { outputFile: path.join(dirname, 'payload-types.ts') },
 })
 
 export default e2eConfig

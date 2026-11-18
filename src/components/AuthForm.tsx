@@ -14,11 +14,36 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
   const [state, formAction, pending] = useActionState(action, initialState)
 
   useEffect(() => {
-    if (state.ok) {
+    if (state.ok && !state.pendingApproval) {
       router.replace('/dashboard')
       router.refresh()
     }
-  }, [router, state.ok])
+  }, [router, state.ok, state.pendingApproval])
+
+  if (state.pendingApproval) {
+    return (
+      <div className="mt-8 space-y-6 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+          <Icon name="check" className="size-7" />
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-xl font-bold text-amber-950">تم تسجيل حسابك بنجاح!</h3>
+          <p className="text-sm leading-relaxed text-amber-900">
+            حسابك الآن <strong>قيد المراجعة والاعتماد</strong> من قِبل إدارة المدرسة. لن تتمكن من الدخول إلى لوحة التحكم إلا بعد موافقة الإدارة على الحساب.
+          </p>
+        </div>
+        <div className="pt-2">
+          <Link
+            href="/login"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#721b3b] px-6 py-3 font-bold text-white shadow-md transition hover:bg-[#5d1530]"
+          >
+            الانتقال لصفحة تسجيل الدخول
+            <Icon name="arrow-left" className="size-4" />
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <form action={formAction} className="mt-8 space-y-5">

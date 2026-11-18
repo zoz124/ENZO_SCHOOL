@@ -7,6 +7,7 @@ import { loginTeacher, logoutTeacher } from '@/lib/teacher-auth'
 export type AuthState = {
   ok: boolean
   message?: string
+  pendingApproval?: boolean
 }
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -24,8 +25,9 @@ export async function loginAction(_: AuthState, formData: FormData): Promise<Aut
   try {
     await loginTeacher(email, password)
     return { ok: true }
-  } catch {
-    return { ok: false, message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'
+    return { ok: false, message: msg }
   }
 }
 
@@ -45,11 +47,14 @@ export async function signupAction(_: AuthState, formData: FormData): Promise<Au
     const payload = await getPayload({ config })
     await payload.create({
       collection: 'teachers',
-      data: { name, subject: subject || undefined, email, password },
+      data: { name, subject: subject || undefined, email, password, status: 'pending' },
       overrideAccess: false,
     })
-    await loginTeacher(email, password)
-    return { ok: true }
+    return {
+      ok: true,
+      pendingApproval: true,
+      message: 'تم تسجيل حسابك بنجاح وهو الآن قيد مراجعة الإدارة للتفعيل. ستتمكن من تسجيل الدخول فور اعتماده.',
+    }
   } catch {
     return { ok: false, message: 'تعذر إنشاء الحساب. قد يكون البريد مستخدمًا بالفعل.' }
   }

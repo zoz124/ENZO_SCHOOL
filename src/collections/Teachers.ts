@@ -5,9 +5,15 @@ const isTeacher = (user: unknown): user is { id: string; collection: 'teachers' 
     user && typeof user === 'object' && 'collection' in user && user.collection === 'teachers',
   )
 
-const teacherSelf: Access = ({ req }) => {
-  if (!isTeacher(req.user)) return false
-  return { id: { equals: req.user.id } }
+const isPayloadAdmin = (user: unknown): boolean =>
+  Boolean(
+    user && typeof user === 'object' && 'collection' in user && user.collection === 'admins',
+  )
+
+const teacherSelfOrAdmin: Access = ({ req }) => {
+  if (isPayloadAdmin(req.user)) return true
+  if (isTeacher(req.user)) return { id: { equals: req.user.id } }
+  return false
 }
 
 export const Teachers: CollectionConfig = {
@@ -17,8 +23,9 @@ export const Teachers: CollectionConfig = {
     plural: 'Teachers',
   },
   admin: {
-    hidden: true,
+    group: 'ENZO School',
     useAsTitle: 'name',
+    defaultColumns: ['name', 'email', 'subject', 'status', 'createdAt'],
   },
   auth: {
     maxLoginAttempts: 5,
@@ -27,10 +34,10 @@ export const Teachers: CollectionConfig = {
   },
   access: {
     create: () => true,
-    read: teacherSelf,
-    update: teacherSelf,
-    delete: () => false,
-    admin: () => false,
+    read: teacherSelfOrAdmin,
+    update: teacherSelfOrAdmin,
+    delete: ({ req }) => isPayloadAdmin(req.user),
+    admin: ({ req }) => isPayloadAdmin(req.user),
   },
   fields: [
     {
@@ -44,6 +51,23 @@ export const Teachers: CollectionConfig = {
       name: 'subject',
       type: 'text',
       maxLength: 80,
+    },
+    {
+      name: 'status',
+      type: 'select',
+      defaultValue: 'pending',
+      required: true,
+      options: [
+        { label: 'قيد المراجعة (Pending)', value: 'pending' },
+        { label: 'مقبول / مفعّل (Approved)', value: 'approved' },
+        { label: 'مرفوض (Rejected)', value: 'rejected' },
+      ],
+      access: {
+        update: ({ req }) => isPayloadAdmin(req.user),
+      },
+      admin: {
+        description: 'حالة اعتماد المعلم. المعلم المقبول (Approved) فقط يستطيع الدخول وإنشاء الامتحانات.',
+      },
     },
   ],
 }

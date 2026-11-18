@@ -45,8 +45,17 @@ const formData = (entries: Record<string, string>): FormData => {
   return data
 }
 
-const signUpTeacher = async (email: string, name = 'أ/ محمد أحمد') => {
+const signUpTeacher = async (email: string, name = 'أ/ محمد أحمد', approve = true) => {
   const result = await signupAction({ ok: false }, formData({ name, email, password: PASSWORD }))
+  if (result.ok && approve) {
+    await payload.update({
+      collection: 'teachers',
+      where: { email: { equals: email } },
+      data: { status: 'approved' },
+      overrideAccess: true,
+    })
+    await loginAction({ ok: false }, formData({ email, password: PASSWORD }))
+  }
   return result
 }
 
@@ -74,12 +83,22 @@ afterAll(async () => {
 })
 
 describe('auth actions', () => {
-  it('signs up a valid teacher and sets a session cookie', async () => {
+  it('signs up a valid teacher with pending status', async () => {
     cookieJar.clear()
     const email = `signup-${Date.now()}@school.test`
-    const result = await signUpTeacher(email)
+    const result = await signUpTeacher(email, 'أ/ محمد أحمد', false)
     expect(result.ok).toBe(true)
-    expect(cookieJar.has('app-session')).toBe(true)
+    expect(result.pendingApproval).toBe(true)
+    expect(cookieJar.has('app-session')).toBe(false)
+  })
+
+  it('rejects login when teacher status is pending', async () => {
+    cookieJar.clear()
+    const email = `pending-${Date.now()}@school.test`
+    await signUpTeacher(email, 'أ/ محمد أحمد', false)
+    const result = await loginAction({ ok: false }, formData({ email, password: PASSWORD }))
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('قيد المراجعة')
   })
 
   it('rejects a duplicate email', async () => {

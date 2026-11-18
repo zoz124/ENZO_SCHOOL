@@ -11,7 +11,7 @@ type Teacher = { id: string | number; email: string; collection: 'teachers' }
 const makeTeacher = async (email: string, name = 'Teacher'): Promise<Teacher> => {
   const doc = await payload.create({
     collection: 'teachers',
-    data: { name, email, password: PASSWORD },
+    data: { name, email, password: PASSWORD, status: 'approved' },
     overrideAccess: false,
   })
   // Payload's access functions read `req.user.collection` to tell a teacher
@@ -504,7 +504,7 @@ describe('teacher accounts', () => {
     await expect(
       payload.create({
         collection: 'teachers',
-        data: { name: 'Second', email, password: PASSWORD },
+        data: { name: 'Second', email, password: PASSWORD, status: 'approved' },
         overrideAccess: false,
       }),
     ).rejects.toThrow()

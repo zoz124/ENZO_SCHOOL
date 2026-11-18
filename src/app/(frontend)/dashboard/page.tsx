@@ -49,7 +49,7 @@ export default async function DashboardPage() {
 
   const attemptsByExam = new Map<string, typeof submittedAttempts>()
   for (const attempt of submittedAttempts) {
-    const examId = typeof attempt.exam === 'string' ? attempt.exam : String(attempt.exam.id)
+    const examId = typeof attempt.exam === 'object' && attempt.exam !== null ? String(attempt.exam.id) : String(attempt.exam)
     attemptsByExam.set(examId, [...(attemptsByExam.get(examId) ?? []), attempt])
   }
 

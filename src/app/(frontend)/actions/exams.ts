@@ -183,7 +183,7 @@ export async function submitAttemptAction(input: {
       overrideAccess: false,
     })
 
-    const examId = typeof updated.exam === 'string' ? updated.exam : updated.exam.id
+    const examId = typeof updated.exam === 'object' && updated.exam !== null ? updated.exam.id : updated.exam
     const exam = await payload.findByID({
       collection: 'exams',
       id: examId,
