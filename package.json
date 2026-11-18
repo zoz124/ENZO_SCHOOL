@@ -29,15 +29,15 @@
     "graphql": "^16.8.1",
     "html-react-parser": "^5.2.10",
     "monaco-editor": "0.55.1",
-    "next": "16.4.2",
+    "next": "16.4.6",
     "payload": "4.0.0-beta.8",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "sharp": "^0.35.4",
-    "@payloadcms/db-postgres": "4.0.0-beta.8"
+    "@payloadcms/db-postgres": "4.0.0-beta.8",
+    "@payloadcms/db-sqlite": "^4.0.0-beta.8"
   },
   "devDependencies": {
-    "@payloadcms/db-sqlite": "^4.0.0-beta.8",
     "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4.0.0",
     "@testing-library/react": "^16.3.3",
@@ -56,7 +56,7 @@
     "vitest": "^5.1.1"
   },
   "engines": {
-    "node": ">=24.22.1",
+    "node": ">=24.22.3",
     "pnpm": "^9 || ^10 || ^11"
   },
   "pnpm": {
