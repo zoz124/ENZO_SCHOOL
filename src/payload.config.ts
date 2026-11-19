@@ -12,6 +12,7 @@ import { Tags } from './collections/Tags'
 import { Teachers } from './collections/Teachers'
 import { Exams } from './collections/Exams'
 import { ExamAttempts } from './collections/ExamAttempts'
+import { migrations } from './migrations'
 import { e2eConfig } from './payload.e2e.config'
 
 const filename = fileURLToPath(import.meta.url)
@@ -24,14 +25,24 @@ const admin = {
   dashboard: {
     widgets: [],
     defaultLayout: [
-      { widgetSlug: 'activity', width: 'full' as const },
-      { widgetSlug: 'collections', width: 'full' as const },
+      { widgetSlug: 'activity' as const, width: 'full' as const },
+      { widgetSlug: 'collections' as const, width: 'full' as const },
     ],
   },
 }
 
+/**
+ * The Playwright/Vitest suite runs the app against a local SQLite file through
+ * `E2E_LOCAL_DB=1`. Hosted deployments (Vercel) run `next start`, so NODE_ENV is
+ * `production` there too and it cannot be used to tell the two apart. A stray
+ * `E2E_LOCAL_DB=1` in a hosting dashboard must never swap the production
+ * database for the throwaway SQLite file at `e2e/.tmp/e2e.db`, which does not
+ * exist on the hosting filesystem.
+ */
+const useLocalE2eDatabase = process.env.E2E_LOCAL_DB === '1' && !process.env.VERCEL
+
 if (
-  process.env.E2E_LOCAL_DB !== '1' &&
+  !useLocalE2eDatabase &&
   !process.env.FIGMA_EID &&
   (!process.env.PAYLOAD_SECRET || !process.env.DATABASE_URL)
 ) {
@@ -41,7 +52,7 @@ if (
 }
 
 const config =
-  process.env.E2E_LOCAL_DB === '1'
+  useLocalE2eDatabase
     ? e2eConfig
     : process.env.FIGMA_EID
       ? buildFigmaConfig({
@@ -73,6 +84,13 @@ const config =
             pool: {
               connectionString: process.env.DATABASE_URL || '',
             },
+            migrationDir: path.resolve(dirname, 'migrations'),
+            // Payload never pushes schema in production, and Vercel has no
+            // build/deploy hook that could run `payload migrate`. Handing the
+            // committed migrations to the adapter makes the first production
+            // request create the tables, so `/admin` works on a fresh
+            // PostgreSQL database instead of failing on missing relations.
+            prodMigrations: migrations,
           }),
           i18n: {
             fallbackLanguage: 'en',

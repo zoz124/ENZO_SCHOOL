@@ -176,10 +176,10 @@ export interface Config {
   db: {
     defaultIDType: number;
   };
-  fallbackLocale: null;
+  fallbackLocale: ('false' | 'none' | 'null') | false | null | 'en' | 'en'[];
   globals: {};
   globalsSelect: {};
-  locale: null;
+  locale: 'en';
   widgets: {
     welcome: WelcomeWidget;
     collections: CollectionsWidget;
