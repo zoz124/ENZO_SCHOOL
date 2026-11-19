@@ -103,6 +103,10 @@ Rules:
 // Route handler
 // ---------------------------------------------------------------------------
 
+// Never evaluate this route at build time: it reads env at request time and
+// depends on the request session.
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest): Promise<NextResponse<GenerateExamResponse>> {
   // 1. Auth — reuse the same session mechanism as the dashboard
   const teacher = await getCurrentTeacher()
