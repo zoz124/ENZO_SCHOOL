@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentTeacher } from '@/lib/teacher-auth'
-import { isValidDataUri, parseGroqContent, MAX_RAW_TEXT_CHARS } from '@/lib/ai-exam-utils'
+import { isValidDataUri, MAX_RAW_TEXT_CHARS } from '@/lib/ai-exam-utils'
+import { callGroqWithRetry, logFailure } from '@/lib/groq-client'
 
 // ---------------------------------------------------------------------------
 // Exported types (imported by the client component)
@@ -22,7 +23,6 @@ export type GenerateExamResponse =
 // the module import and the rest of the app keeps working.
 // ---------------------------------------------------------------------------
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const MAX_IMAGES = 3 // qwen/qwen3.8-27b hard limit per Groq docs
 const MAX_QUESTIONS = 20
 const DEFAULT_QUESTIONS = 5
@@ -154,9 +154,13 @@ export async function POST(req: NextRequest): Promise<NextResponse<GenerateExamR
     )
   }
 
-  // 4. Check API key (server-side only, never logged)
-  const apiKey = process.env.GROQ_API_KEY
+  // 4. Check API key (server-side only, never logged).
+  // Read at request time and trimmed: a Vercel value pasted with a trailing
+  // newline would otherwise be sent as part of the Authorization header.
+  const apiKey = process.env.GROQ_API_KEY?.trim()
   if (!apiKey) {
+    // The ONLY 503 in this route: the key is genuinely absent or empty.
+    logFailure('missing_api_key')
     return NextResponse.json(
       { ok: false, error: 'خدمة توليد الأسئلة غير مفعّلة حاليًا. يرجى الاتصال بالمسؤول.' },
       { status: 503 },
@@ -176,9 +180,12 @@ export async function POST(req: NextRequest): Promise<NextResponse<GenerateExamR
   }
 
   const rawBody = body as Record<string, unknown>
+  // llama-3.3-70b-versatile was shut down by Groq on 2026-08-16.
+  // Vision default verified against https://console.groq.com/docs/vision
+  // (qwen/qwen3.8-27b, max 3 images) and https://console.groq.com/docs/models.
   const models = {
-    vision: process.env.GROQ_VISION_MODEL ?? 'qwen/qwen3.8-27b',
-    text: process.env.GROQ_TEXT_MODEL ?? 'llama-3.3-70b-versatile',
+    vision: process.env.GROQ_VISION_MODEL?.trim() || 'qwen/qwen3.8-27b',
+    text: process.env.GROQ_TEXT_MODEL?.trim() || 'openai/gpt-oss-120b',
   }
 
   // 6. Route by mode
@@ -217,7 +224,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<GenerateExamR
       count,
     )
 
-    return await callGroqWithRetry(apiKey, {
+    return await respondWithGroq(apiKey, models.vision, {
       model: models.vision,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -248,7 +255,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<GenerateExamR
 
       const { systemPrompt, userText } = buildRawTextMessages(rawText)
 
-      return await callGroqWithRetry(apiKey, {
+      return await respondWithGroq(apiKey, models.text, {
         model: models.text,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -285,7 +292,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<GenerateExamR
 
     const { systemPrompt, userText } = buildQaMessages(pairs)
 
-    return await callGroqWithRetry(apiKey, {
+    return await respondWithGroq(apiKey, models.text, {
       model: models.text,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -304,94 +311,16 @@ export async function POST(req: NextRequest): Promise<NextResponse<GenerateExamR
 }
 
 // ---------------------------------------------------------------------------
-// Groq call with one-time retry on parse failure
+// Groq call (implementation lives in src/lib/groq-client.ts so it is testable)
 // ---------------------------------------------------------------------------
 
-async function callGroqWithRetry(
+/** Runs the Groq call and converts the result into an HTTP response. */
+async function respondWithGroq(
   apiKey: string,
+  model: string,
   payload: object,
 ): Promise<NextResponse<GenerateExamResponse>> {
-  const result = await callGroq(apiKey, payload)
+  const result = await callGroqWithRetry(apiKey, payload, model)
   if (result.ok) return NextResponse.json(result)
-
-  // Retry once on content parse errors (not on network/rate-limit/auth errors)
-  if (result.retryable) {
-    const retry = await callGroq(apiKey, payload)
-    if (retry.ok) return NextResponse.json(retry)
-    return NextResponse.json({ ok: false, error: retry.error }, { status: 502 })
-  }
-
   return NextResponse.json({ ok: false, error: result.error }, { status: result.status ?? 502 })
-}
-
-type CallResult =
-  | { ok: true; questions: GeneratedQuestion[] }
-  | { ok: false; error: string; retryable?: boolean; status?: number }
-
-async function callGroq(apiKey: string, payload: object): Promise<CallResult> {
-  let groqRes: Response
-  try {
-    groqRes = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(payload),
-    })
-  } catch {
-    return { ok: false, error: 'تعذر الاتصال بخدمة الذكاء الاصطناعي.', status: 502 }
-  }
-
-  if (!groqRes.ok) {
-    const status = groqRes.status
-    if (status === 429) {
-      return {
-        ok: false,
-        error: 'تجاوزت حد الطلبات. انتظر لحظة وحاول مجددًا.',
-        status: 429,
-      }
-    }
-    return {
-      ok: false,
-      error: `خطأ في خدمة الذكاء الاصطناعي (${status}).`,
-      status: 502,
-    }
-  }
-
-  let groqData: unknown
-  try {
-    groqData = await groqRes.json()
-  } catch {
-    return {
-      ok: false,
-      error: 'استجابة غير صالحة من خدمة الذكاء الاصطناعي.',
-      retryable: true,
-      status: 502,
-    }
-  }
-
-  const content =
-    groqData &&
-    typeof groqData === 'object' &&
-    'choices' in groqData &&
-    Array.isArray((groqData as { choices: unknown[] }).choices) &&
-    (groqData as { choices: Array<{ message?: { content?: string } }> }).choices[0]?.message
-      ?.content
-
-  if (typeof content !== 'string') {
-    return {
-      ok: false,
-      error: 'لم يتم استلام محتوى من الذكاء الاصطناعي.',
-      retryable: true,
-      status: 502,
-    }
-  }
-
-  const parsed = parseGroqContent(content)
-  if (!parsed.ok) {
-    return { ok: false, error: parsed.error, retryable: true, status: 502 }
-  }
-
-  return { ok: true, questions: parsed.questions }
 }

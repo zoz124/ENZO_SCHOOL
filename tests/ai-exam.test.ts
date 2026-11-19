@@ -17,6 +17,7 @@ import {
   stripCodeFences,
   stripThinkBlocks,
 } from '@/lib/ai-exam-utils'
+import { callGroq, callGroqWithRetry, mapGroqFailure } from '@/lib/groq-client'
 
 // ---------------------------------------------------------------------------
 // Safety: ensure fetch is never called in this test file
@@ -401,5 +402,147 @@ describe('parseFreeformQa', () => {
     const result = parseFreeformQa('س: أخير\nج: أخيرة')
     expect(result).toHaveLength(1)
     expect(result[0]).toEqual({ question: 'أخير', answer: 'أخيرة' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Groq status mapping (fetch mocked — no real network)
+// ---------------------------------------------------------------------------
+
+const VALID_GROQ_BODY = {
+  choices: [
+    {
+      message: {
+        content: JSON.stringify({
+          questions: [
+            {
+              question: 'ما عاصمة مصر؟',
+              correct: 'القاهرة',
+              wrong: ['الإسكندرية', 'أسوان', 'طنطا'],
+              explanation: 'القاهرة هي العاصمة.',
+            },
+          ],
+        }),
+      },
+    },
+  ],
+}
+
+function mockGroqResponse(status: number, body: unknown = VALID_GROQ_BODY) {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+describe('mapGroqFailure', () => {
+  it('maps 401 and 403 to 502 with an invalid-key message', () => {
+    for (const upstream of [401, 403]) {
+      const mapped = mapGroqFailure(upstream)
+      expect(mapped.status).toBe(502)
+      expect(mapped.error).toContain('مفتاح Groq غير صالح')
+    }
+  })
+
+  it('maps 404 to 502 with a model-unavailable message', () => {
+    const mapped = mapGroqFailure(404)
+    expect(mapped.status).toBe(502)
+    expect(mapped.error).toContain('موديل Groq غير متاح')
+  })
+
+  it('maps 429 to 429 (rate limit keeps its own status)', () => {
+    const mapped = mapGroqFailure(429)
+    expect(mapped.status).toBe(429)
+    expect(mapped.error).toContain('تجاوزت حد الطلبات')
+  })
+
+  it('maps other upstream errors to 502', () => {
+    for (const upstream of [400, 500, 503]) {
+      expect(mapGroqFailure(upstream).status).toBe(502)
+    }
+  })
+
+  it('never returns 503 — only a missing key produces 503', () => {
+    for (const upstream of [400, 401, 403, 404, 429, 500, 502, 503]) {
+      expect(mapGroqFailure(upstream).status).not.toBe(503)
+    }
+  })
+})
+
+describe('callGroq status mapping', () => {
+  it('returns questions on a successful response', async () => {
+    mockGroqResponse(200)
+    const result = await callGroq('test-key', {}, 'openai/gpt-oss-120b')
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.questions).toHaveLength(1)
+  })
+
+  it('maps an upstream 401 to 502 and does not retry', async () => {
+    const fetchMock = mockGroqResponse(401)
+    const result = await callGroq('test-key', {}, 'openai/gpt-oss-120b')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.status).toBe(502)
+      expect(result.error).toContain('مفتاح Groq غير صالح')
+      expect(result.retryable).toBeFalsy()
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('maps an upstream 404 to 502 with the model message', async () => {
+    mockGroqResponse(404)
+    const result = await callGroq('test-key', {}, 'openai/gpt-oss-120b')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.status).toBe(502)
+      expect(result.error).toContain('موديل Groq غير متاح')
+    }
+  })
+
+  it('maps an upstream 429 to 429', async () => {
+    mockGroqResponse(429)
+    const result = await callGroq('test-key', {}, 'openai/gpt-oss-120b')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.status).toBe(429)
+  })
+
+  it('maps a network failure to 502', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+    const result = await callGroq('test-key', {}, 'openai/gpt-oss-120b')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.status).toBe(502)
+  })
+
+  it('never returns 503 for any upstream status', async () => {
+    for (const upstream of [400, 401, 403, 404, 429, 500, 503]) {
+      mockGroqResponse(upstream)
+      const result = await callGroq('test-key', {}, 'openai/gpt-oss-120b')
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.status).not.toBe(503)
+    }
+  })
+
+  it('does not leak the API key into the log line', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockGroqResponse(401)
+    await callGroq('super-secret-key-value', {}, 'openai/gpt-oss-120b')
+    const logged = spy.mock.calls.flat().join(' ')
+    expect(logged).not.toContain('super-secret-key-value')
+    expect(logged).toContain('/api/generate-exam')
+    spy.mockRestore()
+  })
+
+  it('retries once on a parse failure, then succeeds', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ choices: [] }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => VALID_GROQ_BODY })
+    vi.stubGlobal('fetch', fetchMock)
+    const result = await callGroqWithRetry('test-key', {}, 'openai/gpt-oss-120b')
+    expect(result.ok).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
