@@ -39,6 +39,22 @@ export const Teachers: CollectionConfig = {
     delete: ({ req }) => isPayloadAdmin(req.user),
     admin: ({ req }) => isPayloadAdmin(req.user),
   },
+  hooks: {
+    beforeChange: [
+      ({ data, operation, req }) => {
+        /**
+         * `status` is an administrative decision. Public signup goes through
+         * `payload.create` with `overrideAccess: false`, but the public REST
+         * API also allows anonymous creates, so the value is forced here as
+         * well to make self-approval impossible from any entry point.
+         */
+        if (operation === 'create' && !isPayloadAdmin(req.user)) {
+          data.status = 'pending'
+        }
+        return data
+      },
+    ],
+  },
   fields: [
     {
       name: 'name',
@@ -63,6 +79,7 @@ export const Teachers: CollectionConfig = {
         { label: 'مرفوض (Rejected)', value: 'rejected' },
       ],
       access: {
+        create: ({ req }) => isPayloadAdmin(req.user),
         update: ({ req }) => isPayloadAdmin(req.user),
       },
       admin: {
