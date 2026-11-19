@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentTeacher } from '@/lib/teacher-auth'
-import { isValidDataUri, parseGroqContent } from '@/lib/ai-exam-utils'
+import { isValidDataUri, parseGroqContent, MAX_RAW_TEXT_CHARS } from '@/lib/ai-exam-utils'
 
 // ---------------------------------------------------------------------------
 // Exported types (imported by the client component)
@@ -96,6 +96,29 @@ Rules:
     .join('\n\n')
 
   const userText = `Here are the question-answer pairs. For each, generate 3 wrong options and a brief explanation.\n\n${pairsText}\n\nReturn JSON only.`
+  return { systemPrompt, userText }
+}
+
+/**
+ * Fallback for freeform text the client could not parse into pairs. The model
+ * extracts the question/answer pairs itself, then writes the wrong options.
+ * Output validation and option shuffling stay in code (parseGroqContent).
+ */
+function buildRawTextMessages(rawText: string) {
+  const systemPrompt = `You are an exam-question generator. The user provides raw, unstructured text that contains questions together with their correct answers. The text may use Arabic markers (س، سؤال for the question; ج، جواب، إجابة for the answer), English markers (Q/Question, A/Ans/Answer), list numbering, or no markers at all.
+
+Your task:
+1. Extract every question and its correct answer from the text.
+2. For each extracted pair, write exactly 3 plausible but wrong answer options of similar length and style to the correct answer.
+3. Do NOT invent questions that are not in the text. Do NOT change the question text or the correct answer.
+
+Rules:
+- Output language must match the input language.
+- If the text contains no questions at all, return {"questions":[]}.
+- Return ONLY valid JSON — no markdown fences, no explanation outside JSON.
+- JSON shape: {"questions":[{"question":"","correct":"","wrong":["","",""],"explanation":""}]}`
+
+  const userText = `Extract the questions and their correct answers from the text below, then generate 3 wrong options and a brief explanation for each.\n\n---\n${rawText}\n---\n\nReturn JSON only.`
   return { systemPrompt, userText }
 }
 
@@ -208,9 +231,35 @@ export async function POST(req: NextRequest): Promise<NextResponse<GenerateExamR
 
   if (rawBody.mode === 'qa') {
     const rawPairs = rawBody.pairs
+    const rawText = typeof rawBody.rawText === 'string' ? rawBody.rawText.trim() : ''
+
+    // Fallback path: the client could not parse pairs, so it sent the raw text
+    // and the model extracts the pairs itself.
     if (!Array.isArray(rawPairs) || rawPairs.length === 0) {
-      return NextResponse.json({ ok: false, error: 'يجب إدخال أسئلة وإجابات.' }, { status: 400 })
+      if (!rawText) {
+        return NextResponse.json({ ok: false, error: 'يجب إدخال أسئلة وإجابات.' }, { status: 400 })
+      }
+      if (rawText.length > MAX_RAW_TEXT_CHARS) {
+        return NextResponse.json(
+          { ok: false, error: `النص طويل جدًا. الحد الأقصى ${MAX_RAW_TEXT_CHARS} حرف.` },
+          { status: 400 },
+        )
+      }
+
+      const { systemPrompt, userText } = buildRawTextMessages(rawText)
+
+      return await callGroqWithRetry(apiKey, {
+        model: models.text,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userText },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+        max_tokens: 4000,
+      })
     }
+
     if (rawPairs.length > MAX_PAIRS) {
       return NextResponse.json(
         { ok: false, error: `الحد الأقصى هو ${MAX_PAIRS} سؤالًا.` },

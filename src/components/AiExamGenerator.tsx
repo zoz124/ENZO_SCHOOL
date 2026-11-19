@@ -6,6 +6,7 @@ import { Icon } from './Icon'
 import type { GeneratedQuestion, GenerateExamResponse } from '@/app/api/generate-exam/route'
 import {
   ACCEPTED_IMAGE_TYPES,
+  MAX_RAW_TEXT_CHARS,
   MAX_REQUEST_BYTES,
   isPayloadWithinLimit,
   parseFreeformQa,
@@ -223,9 +224,19 @@ export function AiExamGenerator() {
 
           if (qaInputMode === 'freeform') {
             pairs = parseFreeformQa(rawQaText)
+
+            // Fallback: the text is not empty but no س:/ج: pairs were
+            // recognised. Send the raw text and let the model extract the
+            // pairs itself. Output validation and shuffling stay in code.
             if (pairs.length === 0) {
-              setError('لم يُتعرَّف على أسئلة. استخدم الصيغة: "س: نص السؤال" ثم "ج: الإجابة".')
-              return
+              const rawText = rawQaText.trim().slice(0, MAX_RAW_TEXT_CHARS)
+              if (!rawText) {
+                setError('أدخل سؤالًا وإجابة واحدة على الأقل.')
+                return
+              }
+              bodyJson = JSON.stringify({ mode: 'qa', rawText })
+            } else {
+              bodyJson = JSON.stringify({ mode: 'qa', pairs })
             }
           } else {
             pairs = qaPairs.filter((p) => p.question.trim() && p.answer.trim())
@@ -233,9 +244,8 @@ export function AiExamGenerator() {
               setError('أدخل سؤالًا وإجابة واحدة على الأقل.')
               return
             }
+            bodyJson = JSON.stringify({ mode: 'qa', pairs })
           }
-
-          bodyJson = JSON.stringify({ mode: 'qa', pairs })
         }
 
         // Client-side payload size guard

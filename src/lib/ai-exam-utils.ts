@@ -228,30 +228,89 @@ function blobToDataUri(blob: Blob): Promise<string> {
 // QA freeform parser
 // ---------------------------------------------------------------------------
 
+/** Invisible bidi/zero-width characters that break naive line matching. */
+const INVISIBLE_CHARS = /[\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g
+
+/** Max characters of raw Q&A text accepted when no pairs can be parsed. */
+export const MAX_RAW_TEXT_CHARS = 20_000
+
+/**
+ * Separator between a marker and its content: one of : ： . ) - – (with
+ * optional surrounding spaces). Required, so a word that merely starts with a
+ * marker letter ("سيارة") is never treated as a marker.
+ */
+const SEP = String.raw`\s*[:：.)\u2013-]\s*`
+
+/** Optional leading list numbering: "1.", "1)", "1-". */
+const LEADING_NUM = String.raw`(?:\d+\s*[:：.)\u2013-]\s*)?`
+
+/**
+ * Question marker: optional list number, then س / سؤال / Q / Question, then an
+ * optional number ("س1:"), then a separator. The separator is mandatory and the
+ * marker must be followed by it, which is what stops "سيارة" from matching.
+ */
+const QUESTION_MARKER = new RegExp(
+  String.raw`^${LEADING_NUM}(?:سؤال|س|question|q)\s*\d*${SEP}`,
+  'iu',
+)
+
+/** Answer marker: same shape, for ج / جواب / إجابة / A / Ans / Answer. */
+const ANSWER_MARKER = new RegExp(
+  String.raw`^${LEADING_NUM}(?:الإجابة|الاجابة|إجابة|اجابة|جواب|جـ|ج|answer|ans|a)\s*\d*${SEP}`,
+  'iu',
+)
+
 /**
  * Parse a freeform text block of the shape:
  *   س: <question text>
  *   ج: <answer text>
- * Also accepts English prefixes (q:, a:, question:, answer:).
+ *
+ * Accepts Arabic (س/سؤال, ج/جواب/إجابة) and English (Q/Question, A/Ans/Answer)
+ * markers, optional list numbering ("1. س:"), and the separators : ： . ) - –.
+ * Lines without a marker continue the current field, so multi-line questions
+ * and answers work. Pairs missing either half are dropped.
  */
 export function parseFreeformQa(text: string): Array<{ question: string; answer: string }> {
-  const lines = text
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean)
-  const pairs: Array<{ question: string; answer: string }> = []
-  let cur: Partial<{ question: string; answer: string }> = {}
+  // Normalise line endings and drop bidi marks before matching.
+  const normalised = text.replace(INVISIBLE_CHARS, '').replace(/\r\n?/g, '\n')
 
-  for (const line of lines) {
-    const qMatch = line.match(/^(?:س|q|question)[:\-\s]+(.+)/iu)
-    const aMatch = line.match(/^(?:ج|a|answer)[:\-\s]+(.+)/iu)
-    if (qMatch) {
-      if (cur.question && cur.answer) pairs.push(cur as { question: string; answer: string })
-      cur = { question: qMatch[1]!.trim() }
-    } else if (aMatch) {
-      cur.answer = aMatch[1]!.trim()
-    }
+  const lines = normalised.split('\n')
+  const pairs: Array<{ question: string; answer: string }> = []
+  let cur: { question?: string; answer?: string } = {}
+
+  const flush = () => {
+    const question = cur.question?.trim()
+    const answer = cur.answer?.trim()
+    if (question && answer) pairs.push({ question, answer })
   }
-  if (cur.question && cur.answer) pairs.push(cur as { question: string; answer: string })
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line) continue
+
+    const qMatch = line.match(QUESTION_MARKER)
+    if (qMatch) {
+      // A new question closes the previous pair.
+      flush()
+      cur = { question: line.slice(qMatch[0].length).trim() }
+      continue
+    }
+
+    const aMatch = line.match(ANSWER_MARKER)
+    if (aMatch) {
+      cur.answer = line.slice(aMatch[0].length).trim()
+      continue
+    }
+
+    // No marker: append to whichever field is currently open.
+    if (cur.answer !== undefined) {
+      cur.answer = `${cur.answer}\n${line}`.trim()
+    } else if (cur.question !== undefined) {
+      cur.question = `${cur.question}\n${line}`.trim()
+    }
+    // Text before any marker is ignored.
+  }
+
+  flush()
   return pairs
 }

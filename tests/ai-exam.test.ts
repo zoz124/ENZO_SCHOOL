@@ -345,4 +345,61 @@ describe('parseFreeformQa', () => {
     const result = parseFreeformQa(text)
     expect(result[0]).toEqual({ question: 'نص السؤال', answer: 'الإجابة' })
   })
+
+  it('strips invisible RTL marks before parsing', () => {
+    // \u200F (RLM) and \u200E (LRM) commonly wrap Arabic text copied from Word.
+    const text = '\u200Fس: ما عاصمة مصر؟\u200F\n\u200Fج: القاهرة\u200F'
+    const result = parseFreeformQa(text)
+    expect(result).toHaveLength(1)
+    expect(result[0]).toEqual({ question: 'ما عاصمة مصر؟', answer: 'القاهرة' })
+  })
+
+  it('parses "1. س:" numbered questions', () => {
+    const text = '1. س: السؤال الأول\nج: الإجابة الأولى\n2. س: السؤال الثاني\nج: الإجابة الثانية'
+    const result = parseFreeformQa(text)
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual({ question: 'السؤال الأول', answer: 'الإجابة الأولى' })
+    expect(result[1]).toEqual({ question: 'السؤال الثاني', answer: 'الإجابة الثانية' })
+  })
+
+  it('parses "س)" and "س：" separators', () => {
+    const paren = parseFreeformQa('س) سؤال\nج) إجابة')
+    expect(paren).toHaveLength(1)
+    expect(paren[0]).toEqual({ question: 'سؤال', answer: 'إجابة' })
+
+    const fullwidth = parseFreeformQa('س： سؤال\nج： إجابة')
+    expect(fullwidth).toHaveLength(1)
+    expect(fullwidth[0]).toEqual({ question: 'سؤال', answer: 'إجابة' })
+  })
+
+  it('parses English Q:/A: markers', () => {
+    const text = 'Q: What is 2+2?\nA: 4'
+    const result = parseFreeformQa(text)
+    expect(result).toHaveLength(1)
+    expect(result[0]).toEqual({ question: 'What is 2+2?', answer: '4' })
+  })
+
+  it('appends unmarked lines to the current question and answer', () => {
+    const text = 'س: سؤال طويل\nيمتد على سطرين\nج: إجابة\nتمتد أيضًا على سطرين'
+    const result = parseFreeformQa(text)
+    expect(result).toHaveLength(1)
+    expect(result[0].question).toBe('سؤال طويل\nيمتد على سطرين')
+    expect(result[0].answer).toBe('إجابة\nتمتد أيضًا على سطرين')
+  })
+
+  it('does not treat a word starting with س as a marker', () => {
+    // "سيارة" starts with س but has no separator after the marker letter.
+    const result = parseFreeformQa('سيارة حمراء\nهذا نص عادي')
+    expect(result).toHaveLength(0)
+  })
+
+  it('does not treat "سؤال" without a separator as a marker', () => {
+    expect(parseFreeformQa('سؤال بلا فاصل')).toHaveLength(0)
+  })
+
+  it('flushes the final pair at the end of input', () => {
+    const result = parseFreeformQa('س: أخير\nج: أخيرة')
+    expect(result).toHaveLength(1)
+    expect(result[0]).toEqual({ question: 'أخير', answer: 'أخيرة' })
+  })
 })
