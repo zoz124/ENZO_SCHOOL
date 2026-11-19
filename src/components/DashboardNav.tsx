@@ -22,6 +22,13 @@ export function DashboardNav({ teacherName }: { teacherName: string }) {
           <Icon name="plus" className="size-5" />
           إنشاء امتحان
         </Link>
+        <Link
+          href="/exam-generator"
+          className="flex items-center gap-3 rounded-2xl px-4 py-3.5 text-sm font-bold text-[#766269] transition hover:bg-[#f7f1f0] hover:text-[#721b3b]"
+        >
+          <Icon name="sparkle" className="size-5" />
+          مولّد AI
+        </Link>
       </nav>
       <div className="mt-auto rounded-2xl bg-[#f8f3f1] p-4">
         <div className="flex items-center gap-3">
