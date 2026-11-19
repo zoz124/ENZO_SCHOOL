@@ -1,9 +1,10 @@
 'use client'
 
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
 import { createExamAction } from '@/app/(frontend)/actions/exams'
 import { Icon } from './Icon'
+import { AI_QUESTIONS_STORAGE_KEY } from './AiExamGenerator'
 
 type BuilderQuestion = {
   prompt: string
@@ -25,6 +26,37 @@ export function ExamBuilder() {
   const [message, setMessage] = useState('')
   const [pending, startTransition] = useTransition()
 
+  // On first mount, check for AI-generated questions handed off via sessionStorage.
+  // This is a one-time read; we clear the key immediately so a page refresh
+  // doesn't re-apply stale questions.
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem(AI_QUESTIONS_STORAGE_KEY)
+      if (!stored) return
+      sessionStorage.removeItem(AI_QUESTIONS_STORAGE_KEY)
+      const parsed = JSON.parse(stored) as unknown
+      if (!Array.isArray(parsed) || parsed.length === 0) return
+      const loaded: BuilderQuestion[] = (parsed as unknown[])
+        .filter(
+          (q): q is BuilderQuestion =>
+            !!q &&
+            typeof q === 'object' &&
+            typeof (q as BuilderQuestion).prompt === 'string' &&
+            Array.isArray((q as BuilderQuestion).options) &&
+            typeof (q as BuilderQuestion).correctOption === 'number',
+        )
+        .map((q) => ({
+          prompt: q.prompt,
+          options: q.options.length >= 2 ? q.options : [...q.options, ''],
+          correctOption: q.correctOption,
+          points: typeof q.points === 'number' && q.points >= 1 ? q.points : 1,
+        }))
+      if (loaded.length > 0) setQuestions(loaded)
+    } catch {
+      // sessionStorage may be unavailable (e.g. private browsing on some
+      // browsers). Silently ignore — the builder still starts with an empty question.
+    }
+  }, [])
   const updateQuestion = (index: number, patch: Partial<BuilderQuestion>) => {
     setQuestions((current) =>
       current.map((question, i) => (i === index ? { ...question, ...patch } : question)),
